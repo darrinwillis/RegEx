@@ -1,26 +1,25 @@
-module RegEx (makeNFA) where
+--module RegEx (*) where
 import Data.List
 import Data.Char
-
+import Test.HUnit
 
 
 data RegEx = Sym Char
            | Seq RegEx RegEx
            | Alt RegEx RegEx
            | Rep RegEx
+  deriving Show
 
 data NFA = NFA NFANode
 
 data NFAEdge = NFAEdge Char NFANode | Epsilon NFANode
-  deriving Show
+  deriving (Show, Eq)
 
 data NFANode = NFANode [NFAEdge] Bool
-  deriving Show
+  deriving (Show, Eq)
 
 type RegString = String
 type RegResult = Bool
-data TestCase = TestCase RegString String Bool
-  deriving Show
 
 isEndState :: NFANode -> Bool
 isEndState (NFANode _ b) = b
@@ -36,64 +35,79 @@ edgeNode (Epsilon node) = node
 nodeEdges :: NFANode -> [NFAEdge]
 nodeEdges (NFANode xs _) = xs
 
-tests :: [TestCase]
-tests = [
-    TestCase "a" "a" True,
-    TestCase "a" "" False,
-    TestCase "a" "b" False,
-    TestCase "b" "a" False,
-    TestCase "b" "b" True,
-    TestCase "a" "A" False,
-    TestCase "[ab]" "a" True,
-    TestCase "[ab]" "b" True,
-    TestCase "[ab]" "c" False,
-    TestCase "a*" "" True,
-    TestCase "a*" "a" True,
-    TestCase "a*" "aaaa" True,
-    TestCase "a*" "b" False,
-    TestCase "a*" "ab" False,
-    TestCase "a*" "aab" False,
-    TestCase "a-d" "c" True,
-    TestCase "a-d" "ad" False,
-    TestCase "a-d" "e" False,
-    TestCase "a-d" "d" True
-      ]
+fullTests :: [Test]
+fullTests = [
+    fullStackTest "a" "a" True,
+    fullStackTest "a" "" False,
+    fullStackTest "a" "b" False,
+    fullStackTest "b" "a" False,
+    fullStackTest "b" "b" True,
+    fullStackTest "a" "A" False,
+    fullStackTest "[ab]" "a" True,
+    fullStackTest "[ab]" "b" True,
+    fullStackTest "[ab]" "c" False,
+    fullStackTest "a*" "" True,
+    fullStackTest "a*" "a" True,
+    fullStackTest "a*" "aaaa" True,
+    fullStackTest "a*" "b" False,
+    fullStackTest "a*" "ab" False,
+    fullStackTest "a*" "aab" False,
+    fullStackTest "a-d" "c" True,
+    fullStackTest "a-d" "ad" False,
+    fullStackTest "a-d" "e" False,
+    fullStackTest "a-d" "d" True
+    ]
 
-main = do
-  let lengthStr = show (length tests)
-  let promptStr = "\nRunning " ++ lengthStr ++ " tests..."
-  putStrLn (promptStr ++ "\n")
-  putStrLn testReport
+fullStackTest :: RegString -> String -> Bool -> Test
+fullStackTest rs str expected =
+        TestCase $ assertEqual message (compile rs str) expected 
+    where message = "regstr " ++ quotify rs ++ " on input " ++ 
+                   quotify str ++ " should be " ++ show expected
 
-testReport :: String
-testReport
-  | numFailed == 0 = "All tests passed!"
-  | otherwise = show numFailed ++ " tests failed\n" ++ testResults
-  where testResults = concat (intersperse "\n" failStrs)
-        failStrs = map errorString failedTests
-        numFailed = length failedTests
-        failedTests = filter ((==) False . runTest) tests
+quotify :: String -> String
+quotify str = '"' : str ++ ['"']
 
-errorString :: TestCase -> String
-errorString (TestCase regStr str expectedResult) = message
-  where message = "regstr " ++ fRegStr ++ " failed on " ++ 
-                   fInput ++ " with output " ++ fOutput
-        fRegStr = ['"'] ++ regStr ++ ['"']
-        fInput = ['"'] ++ str ++ ['"']
-        fOutput = ['"'] ++ show expectedResult ++ ['"']
-
-runTest :: TestCase -> Bool
-runTest (TestCase regstr str result) = compile regstr str == result
+main = runTestTT $ TestList nfaTests --fullTests
 
 compile :: RegString -> String -> RegResult
 compile rs str = True
 
-testInput :: RegEx -> String -> Bool
-testInput = undefined
+nfaTests :: [Test]
+nfaTests = [
+    nfaRunTest (Sym 'a') "a" True,
+    nfaRunTest (Sym 'a') "aa" False,
+    nfaRunTest (Sym 'a') "b" False,
+    nfaRunTest (Sym 'a') ""  False,
+    nfaRunTest (Sym 'a') "ba" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "a" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "b" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "ab" True,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "ba" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "ac" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "bb" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "bab" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "abab" False,
+    nfaRunTest (Seq (Sym 'a') (Sym 'b')) "" False,
+    nfaRunTest (Alt (Sym 'a') (Sym 'b')) "a" True,
+    nfaRunTest (Alt (Sym 'a') (Sym 'b')) "b" True,
+    nfaRunTest (Alt (Sym 'a') (Sym 'b')) "c" False,
+    nfaRunTest (Alt (Sym 'a') (Sym 'b')) "ab" False,
+    nfaRunTest (Alt (Sym 'a') (Sym 'b')) "ba" False,
+    nfaRunTest (Alt (Sym 'a') (Sym 'b')) "" False,
+    nfaRunTest (Rep (Sym 'a')) "a" True,
+    nfaRunTest (Rep (Sym 'a')) "" True,
+    nfaRunTest (Rep (Sym 'a')) "aa" True,
+    nfaRunTest (Rep (Sym 'a')) "b" False,
+    nfaRunTest (Rep (Sym 'a')) "ab" False,
+    nfaRunTest (Rep (Sym 'a')) "aba" False,
+    nfaRunTest (Rep (Sym 'a')) "aaa" True
+    ]
 
-addEdge :: NFANode -> NFANode -> NFANode
-addEdge (NFANode xs b) newNode = NFANode (newEdge:xs) b
-    where   newEdge = Epsilon newNode
+nfaRunTest :: RegEx -> String -> Bool -> Test
+nfaRunTest re str expected = TestCase $ assertEqual message result expected 
+    where message = "RegEx " ++ show re ++ " on input " ++ 
+                   quotify str ++ " should be " ++ show expected
+          result = runNFA (makeNFA re) str
 
 makeNFA :: RegEx -> NFANode
 makeNFA r = makeNFANode r (NFANode [] True)
@@ -117,12 +131,12 @@ runNFA node (c:rest) = let nextStates = nextNodes node c
                        in  any id nextResults
 
 nextNodes :: NFANode -> Char -> [NFANode]
-nextNodes (NFANode xs _) c = map edgeNode (filter validEdge c allEdges)
+nextNodes node c = map edgeNode (filter (validEdge c) allEdges)
     where   validEdge a (NFAEdge c _) = a == c
-            validEdge _ (Epsilon _) = True
-            allEdges = concat (map nodeEdges allPossible)
+            validEdge _ (Epsilon _) = False
+            allEdges = nub $ concat (map nodeEdges (allPossible node))
 
 allPossible :: NFANode -> [NFANode]
-allPossible (NFANode edges _) = concat allPossible epNodes
+allPossible node@(NFANode edges _) = node : concat (map allPossible epNodes)
     where   epEdges = filter isEpsilon edges
             epNodes = map edgeNode epEdges

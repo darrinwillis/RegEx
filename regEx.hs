@@ -1,6 +1,7 @@
 --module RegEx (*) where
 import Data.List
 import Data.Char
+import Data.Set as S
 import Test.HUnit
 
 
@@ -10,30 +11,41 @@ data RegEx = Sym Char
            | Rep RegEx
   deriving Show
 
-data NFA = NFA NFANode
-
-data NFAEdge = NFAEdge Char NFANode | Epsilon NFANode
+data NFA a = NFA (Set a) (Set (Move a)) a (Set a)
   deriving (Show, Eq)
 
-data NFANode = NFANode [NFAEdge] Bool
-  deriving (Show, Eq)
+data Move a = Move a Char a | EMove a a
+  deriving (Show, Eq, Ord)
+
+type Nod = Int
 
 type RegString = String
 type RegResult = Bool
 
-isEndState :: NFANode -> Bool
-isEndState (NFANode _ b) = b
+isEndState :: NFA Nod -> Nod -> Bool
+isEndState (NFA _ _ _ ends) n = member n ends
 
-isEpsilon :: NFAEdge -> Bool
-isEpsilon (NFAEdge _ _) = False
-isEpsilon (Epsilon _) = True
+states :: NFA a -> Set a
+states (NFA st _ _ _) = st
 
-edgeNode :: NFAEdge -> NFANode
-edgeNode (NFAEdge _ node) = node
-edgeNode (Epsilon node) = node
+moves :: NFA a -> Set (Move a)
+moves (NFA _ mv _  _) = mv
 
-nodeEdges :: NFANode -> [NFAEdge]
-nodeEdges (NFANode xs _) = xs
+start :: NFA a -> a
+start (NFA _ _ s _) = s
+
+endStates :: NFA a -> Set a
+endStates (NFA _ _ _ e) = e
+
+renumber :: Int -> NFA Int -> NFA Int
+renumber n (NFA all moves start ends) =
+        NFA (S.map func all) (newMoves) (func start) (S.map func ends)
+    where   func = (+n)
+            newMoves = S.map (renumber_move n) moves
+
+renumber_move :: Int -> Move Int -> Move Int
+renumber_move n (Move a c b) = Move (a+n) c (b+n)
+renumber_move n (EMove a b) = EMove (a+n) (b+n)
 
 fullTests :: [Test]
 fullTests = [
@@ -60,8 +72,8 @@ fullTests = [
 
 fullStackTest :: RegString -> String -> Bool -> Test
 fullStackTest rs str expected =
-        TestCase $ assertEqual message (compile rs str) expected 
-    where message = "regstr " ++ quotify rs ++ " on input " ++ 
+        TestCase $ assertEqual message (compile rs str) expected
+    where message = "regstr " ++ quotify rs ++ " on input " ++
                    quotify str ++ " should be " ++ show expected
 
 quotify :: String -> String
@@ -70,7 +82,7 @@ quotify str = '"' : str ++ ['"']
 main = runTestTT $ TestList nfaTests --fullTests
 
 compile :: RegString -> String -> RegResult
-compile rs str = True
+compile rs str = undefined
 
 nfaTests :: [Test]
 nfaTests = [
@@ -104,39 +116,36 @@ nfaTests = [
     ]
 
 nfaRunTest :: RegEx -> String -> Bool -> Test
-nfaRunTest re str expected = TestCase $ assertEqual message result expected 
-    where message = "RegEx " ++ show re ++ " on input " ++ 
+nfaRunTest re str expected = TestCase $ assertEqual message result expected
+    where message = "RegEx " ++ show re ++ " on input " ++
                    quotify str ++ " should be " ++ show expected
-          result = runNFA (makeNFA re) str
+          result = runNFA (build re) str
 
-makeNFA :: RegEx -> NFANode
-makeNFA r = makeNFANode r (NFANode [] True)
+build :: RegEx -> NFA Nod
+build (Sym c) = NFA (fromList [0, 1]) (singleton $ Move 0 c 1) 0 (singleton 1)
+build (Seq r1 r2) = NFA (newStates) newMoves (start n1) (endStates n2)
+    where   newStates = S.union (states n1) (states n2)
+            newMoves = S.unions [moves n1, moves n2, combineMoves]
+            combineMoves = S.map (flip EMove $ start n2) $ endStates n1 
+            s1 = size $ states n1
+            s2 = size $ states n2
+            n1 = build r1
+            n2 = renumber s1 $ build r2
 
-makeNFANode :: RegEx -> NFANode -> NFANode
-makeNFANode (Sym c) next = NFANode [NFAEdge c next] False
-makeNFANode (Seq a b) next = NFANode [Epsilon $ makeNFANode a bNode] False
-    where   bEdge = Epsilon bNode
-            bNode = makeNFANode b next
-makeNFANode (Alt a b) next = NFANode [aEdge, bEdge] False
-    where   aEdge = Epsilon $ makeNFANode a next
-            bEdge = Epsilon $ makeNFANode b next
-makeNFANode (Rep a) next = let branchNode = NFANode [Epsilon next, Epsilon rNode] False
-                               rNode = makeNFANode a branchNode       
-                           in  branchNode
+runNFA :: NFA Nod -> String -> Bool
+runNFA (NFA states moves start ends) str = undefined
+--runNFA node [] = isEndState node
+--runNFA node (c:rest) = let nextStates = nextNods node c
+--                           nextResults = map (flip runNFA rest) nextStates
+--                       in  any id nextResults
 
-runNFA :: NFANode -> String -> Bool
-runNFA node [] = isEndState node
-runNFA node (c:rest) = let nextStates = nextNodes node c
-                           nextResults = map (flip runNFA rest) nextStates
-                       in  any id nextResults
+--nextNods :: NFANod -> Char -> [NFANod]
+--nextNods node c = map edgeNod (filter (validEdge c) allEdges)
+--    where   validEdge a (NFAEdge c _) = a == c
+--            validEdge _ (Epsilon _) = False
+--            allEdges = nub $ concat (map nodeEdges (allPossible node))
 
-nextNodes :: NFANode -> Char -> [NFANode]
-nextNodes node c = map edgeNode (filter (validEdge c) allEdges)
-    where   validEdge a (NFAEdge c _) = a == c
-            validEdge _ (Epsilon _) = False
-            allEdges = nub $ concat (map nodeEdges (allPossible node))
-
-allPossible :: NFANode -> [NFANode]
-allPossible node@(NFANode edges _) = node : concat (map allPossible epNodes)
-    where   epEdges = filter isEpsilon edges
-            epNodes = map edgeNode epEdges
+--allPossible :: NFANod -> [NFANod]
+--allPossible node@(NFANod edges _) = node : concat (map allPossible epNods)
+--    where   epEdges = filter isEpsilon edges
+--            epNods = map edgeNod epEdges

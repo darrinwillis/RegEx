@@ -126,11 +126,27 @@ build (Sym c) = NFA (fromList [0, 1]) (singleton $ Move 0 c 1) 0 (singleton 1)
 build (Seq r1 r2) = NFA (newStates) newMoves (start n1) (endStates n2)
     where   newStates = S.union (states n1) (states n2)
             newMoves = S.unions [moves n1, moves n2, combineMoves]
-            combineMoves = S.map (flip EMove $ start n2) $ endStates n1 
-            s1 = size $ states n1
-            s2 = size $ states n2
+            combineMoves = allMove (endStates n1) (start n2)
+            n2start = size $ states n1
             n1 = build r1
-            n2 = renumber s1 $ build r2
+            n2 = renumber n2start $ build r2
+build (Alt r1 r2) = NFA newStates newMoves newStart $ singleton newEnd
+    where   newStates = S.unions [(states n1), (states n2),
+                                  fromList [newStart, newEnd]]
+            newMoves = S.unions [moves n1, moves n2, combineMoves, newEndMoves]
+            combineMoves = fromList [EMove newStart (start n1),
+                            EMove newStart (start n2)]
+            newEndMoves = S.unions [allMove (endStates n1) newEnd,
+                                   allMove (endStates n2) newEnd]
+            newEnd = n2end + 1
+            newStart = 0
+            n2start = size (states n1) + 1
+            n2end = size (states n2) + n2start
+            n1 = renumber 1 $ build r1
+            n2 = renumber (n2start) $ build r2
+
+allMove :: (Ord a) => Set a -> a -> Set(Move a)
+allMove starts end = S.map (flip EMove $ end) starts
 
 runNFA :: NFA Nod -> String -> Bool
 runNFA (NFA states moves start ends) str = undefined

@@ -43,9 +43,28 @@ renumber n (NFA all moves start ends) =
     where   func = (+n)
             newMoves = S.map (renumber_move n) moves
 
+moveStart :: Move a -> a
+moveStart (Move  a _ _) = a
+moveStart (EMove a   _) = a
+
+moveEnd :: Move a -> a
+moveEnd (Move  _ _ b) = b
+moveEnd (EMove _   b) = b
+
+moveChar :: Move a -> Maybe Char
+moveChar (Move  _ c _) = Just c
+moveChar (EMove _   _) = Nothing
+
+isEMove :: Move a -> Bool
+isEMove (Move  _ _ _) = False
+isEMove (EMove _   _) = True
+
 renumber_move :: Int -> Move Int -> Move Int
 renumber_move n (Move a c b) = Move (a+n) c (b+n)
 renumber_move n (EMove a b) = EMove (a+n) (b+n)
+
+flattenSet :: (Ord a) => Set(Set a) -> Set a
+flattenSet = S.foldl S.union empty
 
 fullTests :: [Test]
 fullTests = [
@@ -149,11 +168,29 @@ allMove :: (Ord a) => Set a -> a -> Set(Move a)
 allMove starts end = S.map (flip EMove $ end) starts
 
 runNFA :: NFA Nod -> String -> Bool
-runNFA (NFA states moves start ends) str = undefined
---runNFA node [] = isEndState node
---runNFA node (c:rest) = let nextStates = nextNods node c
---                           nextResults = map (flip runNFA rest) nextStates
---                       in  any id nextResults
+runNFA (NFA states moves start ends) str =
+            processChar (singleton start) moves ends str
+
+processChar :: (Ord a) => Set a -> Set(Move a) -> Set a -> String -> Bool
+processChar starts moves ends [] = not $ S.null $ intersection starts ends
+processChar starts moves ends (c:rest) = processChar newStarts moves ends rest
+    where   newStarts = takeMove starts moves c
+
+takeMove :: (Ord a) => Set a -> Set(Move a) -> Char -> Set a
+takeMove starts moves c = S.map moveEnd $ S.filter moveMatches theseMoves
+    where   currentStates = flattenSet $ S.map (flip allCurrent moves) starts
+            moveMatches (Move st c2 _) = c == c2
+            moveMatches (EMove st _) = False
+            theseMoves = S.filter ((flip member) currentStates . moveStart) moves
+
+allCurrent :: (Ord a) => a -> Set(Move a) -> Set a
+allCurrent n moves =  S.insert n allConnected
+    where   adjacents = takeEMove n moves
+            allConnected = flattenSet $ S.map (flip allCurrent moves) adjacents
+
+takeEMove :: (Ord a) => a -> Set(Move a) -> Set a
+takeEMove n moves = S.map moveEnd $ S.filter isValid moves
+    where   isValid m = and [isEMove m, (moveStart m) == n]
 
 --nextNods :: NFANod -> Char -> [NFANod]
 --nextNods node c = map edgeNod (filter (validEdge c) allEdges)

@@ -131,7 +131,20 @@ nfaTests = [
     nfaRunTest (Rep (Sym 'a')) "b" False,
     nfaRunTest (Rep (Sym 'a')) "ab" False,
     nfaRunTest (Rep (Sym 'a')) "aba" False,
-    nfaRunTest (Rep (Sym 'a')) "aaa" True
+    nfaRunTest (Rep (Sym 'a')) "aaa" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "a" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "aa" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "bb" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "ab" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "c" False,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "aba" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "bab" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "abba" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "babba" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "bbaabb" True,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "babacaba" False,
+    nfaRunTest (Rep (Alt (Sym 'a') (Sym 'b'))) "bab" True
     ]
 
 nfaRunTest :: RegEx -> String -> Bool -> Test

@@ -163,6 +163,16 @@ build (Alt r1 r2) = NFA newStates newMoves newStart $ singleton newEnd
             n2end = size (states n2) + n2start
             n1 = renumber 1 $ build r1
             n2 = renumber (n2start) $ build r2
+build (Rep r) = NFA newStates newMoves newStart $ singleton newEnd
+    where   newStates = S.union (states n) (fromList [newStart, newEnd])
+            newStart = 0
+            newEnd = size(states n) + 2 -- 1 for new start 1 for new end
+            newMoves = S.unions [moves n, 
+                    allMove (endStates n) newEnd,
+                    allMove (endStates n) $ start n,
+                    singleton $ EMove newStart $ start n,
+                    singleton $ EMove newStart newEnd]
+            n = renumber 1 $ build r
 
 allMove :: (Ord a) => Set a -> a -> Set(Move a)
 allMove starts end = S.map (flip EMove $ end) starts
@@ -172,16 +182,20 @@ runNFA (NFA states moves start ends) str =
             processChar (singleton start) moves ends str
 
 processChar :: (Ord a) => Set a -> Set(Move a) -> Set a -> String -> Bool
-processChar starts moves ends [] = not $ S.null $ intersection starts ends
+processChar starts moves ends [] = not $ S.null $ intersection allStarts ends
+    where   allStarts = allConnected starts moves
 processChar starts moves ends (c:rest) = processChar newStarts moves ends rest
     where   newStarts = takeMove starts moves c
 
 takeMove :: (Ord a) => Set a -> Set(Move a) -> Char -> Set a
 takeMove starts moves c = S.map moveEnd $ S.filter moveMatches theseMoves
-    where   currentStates = flattenSet $ S.map (flip allCurrent moves) starts
+    where   currentStates = allConnected starts moves
             moveMatches (Move st c2 _) = c == c2
             moveMatches (EMove st _) = False
             theseMoves = S.filter ((flip member) currentStates . moveStart) moves
+
+allConnected :: (Ord a) => Set a -> Set(Move a) -> Set a
+allConnected starts moves = flattenSet $ S.map (flip allCurrent moves) starts
 
 allCurrent :: (Ord a) => a -> Set(Move a) -> Set a
 allCurrent n moves =  S.insert n allConnected

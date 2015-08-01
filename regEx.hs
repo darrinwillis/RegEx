@@ -219,13 +219,3 @@ takeEMove :: (Ord a) => a -> Set(Move a) -> Set a
 takeEMove n moves = S.map moveEnd $ S.filter isValid moves
     where   isValid m = and [isEMove m, (moveStart m) == n]
 
---nextNods :: NFANod -> Char -> [NFANod]
---nextNods node c = map edgeNod (filter (validEdge c) allEdges)
---    where   validEdge a (NFAEdge c _) = a == c
---            validEdge _ (Epsilon _) = False
---            allEdges = nub $ concat (map nodeEdges (allPossible node))
-
---allPossible :: NFANod -> [NFANod]
---allPossible node@(NFANod edges _) = node : concat (map allPossible epNods)
---    where   epEdges = filter isEpsilon edges
---            epNods = map edgeNod epEdges

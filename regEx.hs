@@ -3,7 +3,7 @@ import Data.List
 import Data.Char
 import Data.Set as S
 import Test.HUnit
-
+import Control.Applicative
 
 data RegEx = Sym Char
            | Seq RegEx RegEx
@@ -64,7 +64,7 @@ renumber_move n (Move a c b) = Move (a+n) c (b+n)
 renumber_move n (EMove a b) = EMove (a+n) (b+n)
 
 flattenSet :: (Ord a) => Set(Set a) -> Set a
-flattenSet = S.foldl S.union empty
+flattenSet = S.foldl S.union S.empty
 
 fullTests :: [Test]
 fullTests = [
@@ -180,7 +180,7 @@ build (Rep r) = NFA newStates newMoves newStart $ singleton newEnd
     where   newStates = S.union (states n) (fromList [newStart, newEnd])
             newStart = 0
             newEnd = size(states n) + 2 -- 1 for new start 1 for new end
-            newMoves = S.unions [moves n, 
+            newMoves = S.unions [moves n,
                     allMove (endStates n) newEnd,
                     allMove (endStates n) $ start n,
                     singleton $ EMove newStart $ start n,
@@ -219,3 +219,96 @@ takeEMove :: (Ord a) => a -> Set(Move a) -> Set a
 takeEMove n moves = S.map moveEnd $ S.filter isValid moves
     where   isValid m = and [isEMove m, (moveStart m) == n]
 
+-- PARSER LIBRARY
+
+type Error = String
+newtype Parser a = P { unP :: String -> (String, Either Error a) }
+
+instance Functor Parser where
+    fmap f (P st) = P $ \stream -> case st stream of
+        (res, Left err) -> (res, Left err)
+        (res, Right a ) -> (res, Right $ f a)
+
+instance Applicative Parser where
+    pure a = P (\stream -> (stream, Right a))
+    P ff <*> P xx = P $ \stream0 -> case ff stream0 of
+        (stream1, Left err) -> (stream1, Left err)
+        (stream1, Right f ) -> case xx stream1 of
+            (stream2, Left err) -> (stream2, Left err)
+            (stream2, Right x ) -> (stream2, Right $ f x)
+
+parseChar :: Char -> Parser Char
+parseChar ch = P $ \stream -> case stream of
+    (c:cs) | c == ch    -> (cs, Right ch)
+           | otherwise  -> (cs, Left "character doesn't match")
+
+satisfy :: (Char -> Bool) -> Parser Char
+satisfy f = P $ \stream -> case stream of
+    []                  -> (stream, Left "end of stream")
+    (c:cs) | f c        -> (cs, Right c)
+           | otherwise  -> (cs, Left "did not satisfy")
+
+try :: Parser a -> Parser a
+try (P f) = P $ \stream0 -> case f stream0 of
+    (_      , Left err) -> (stream0, Left err)
+    (stream1, Right a ) -> (stream1, Right a)
+
+orElse :: Parser a -> Parser a -> Parser a
+orElse (P f1) (P f2) = P $ \stream0 -> case f1 stream0 of
+    (stream1, Right a ) -> (stream1, Right a)
+    (stream1, Left err) -> f2 stream0
+
+instance Alternative Parser where
+    empty = P $ \stream -> (stream, Left "empty")
+    (<|>) = orElse
+    many = manyParser
+    some = someParser
+
+manyParser :: Parser a -> Parser [a]
+manyParser (P f) = P go where
+    go stream = case f stream of
+        (_      , Left err) -> (stream, Right [])
+        (stream1, Right a ) -> case go stream1 of
+            (stream2, Left err) -> (stream2, Left err)
+            (stream2, Right as) -> (stream2, Right $ a:as)
+
+someParser :: Parser a -> Parser [a]
+someParser (P f) = P $ \stream -> case f stream of
+    (stream1, Left err) -> (stream1, Left err)
+    (stream1, Right a ) ->
+        let (P fmany) = manyParser $ P f
+        in case fmany stream1 of
+            (stream2, Left err) -> (stream2, Left err)
+            (stream2, Right as) -> (stream2, Right $ a:as)
+
+char :: Char -> Parser Char
+char c = satisfy (== c)
+
+string :: String -> Parser String
+string [] = pure []
+string (c:cs) = (:) <$> char c <*> string cs
+
+oneOf :: [Char] -> Parser Char
+oneOf cs = satisfy (`elem` cs)
+
+parens :: Parser a -> Parser a
+parens parseA = dropFirstAndLast <$> char '(' <*> parseA <*> char ')'
+    where dropFirstAndLast _ a _ = a
+
+brackets :: Parser a -> Parser a
+brackets parseA = dropFirstAndLast <$> char '[' <*> parseA <*> char ']'
+    where dropFirstAndLast _ a _ = a
+
+-- REGEX PARSING
+pSym :: Parser RegEx
+pSym = Sym <$> satisfy (\_ -> True)
+
+pSeq :: Parser RegEx
+pSeq = Seq <$> pRegex <*> pRegex
+
+pAlt :: Parser RegEx
+pAlt = undefined
+--pAlt = Alt <$> brackets pRegex
+
+pRegex :: Parser RegEx
+pRegex = pSym <|> pSeq

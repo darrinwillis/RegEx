@@ -299,6 +299,17 @@ brackets :: Parser a -> Parser a
 brackets parseA = dropFirstAndLast <$> char '[' <*> parseA <*> char ']'
     where dropFirstAndLast _ a _ = a
 
+sepBy :: Char -> Parser a -> Parser [a]
+sepBy c parseA = sepBy1 c parseA <|> pure []
+
+sepBy1 :: Char -> Parser a -> Parser [a]
+sepBy1 c parseA = (:) <$> parseA <*> (many unit)
+    where unit = second (char c) parseA
+
+second :: Parser a -> Parser b -> Parser b
+second a b = dropFirst <$> a <*> b
+    where dropFirst _ n = n
+
 -- REGEX PARSING
 pSym :: Parser RegEx
 pSym = Sym <$> satisfy (\_ -> True)

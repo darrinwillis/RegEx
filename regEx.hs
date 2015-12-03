@@ -315,11 +315,16 @@ pSym :: Parser RegEx
 pSym = Sym <$> satisfy (\_ -> True)
 
 pSeq :: Parser RegEx
-pSeq = Seq <$> pRegex <*> pRegex
+pSeq = Seq <$> pRegexNoSeq <*> pRegex
 
 pAlt :: Parser RegEx
-pAlt = undefined
---pAlt = Alt <$> brackets pRegex
+pAlt = brackets inner
+    where inner = Alt <$> pRegex <*> pRegex
 
+-- TODO Get escape characters correct
 pRegex :: Parser RegEx
-pRegex = pSym <|> pSeq
+pRegex = pAlt <|> pSeq <|> pSym
+
+pRegexNoSeq :: Parser RegEx
+pRegexNoSeq = pAlt <|> pSym
+

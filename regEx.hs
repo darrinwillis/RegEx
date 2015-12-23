@@ -1,6 +1,7 @@
 --module RegEx (*) where
 import Data.List
 import Data.Char
+import Data.Maybe
 import Data.Set as S
 import Test.HUnit
 import Control.Applicative
@@ -312,14 +313,27 @@ second a b = dropFirst <$> a <*> b
 
 -- REGEX PARSING
 pSym :: Parser RegEx
-pSym = Sym <$> satisfy (\_ -> True)
+pSym = Sym <$> satisfy (\a -> not $ isEscapedChar a)
+
+escapes =
+    [('[', "\\["),
+     ('.', "\\."),
+     ('*', "\\*")]
+
+-- Gets escape information
+isEscapedChar :: Char -> Bool
+isEscapedChar c = isJust foundChar
+    where foundChar = lookup c escapes
 
 pSeq :: Parser RegEx
 pSeq = Seq <$> pRegexNoSeq <*> pRegex
 
 pAlt :: Parser RegEx
 pAlt = brackets inner
-    where inner = Alt <$> pRegex <*> pRegex
+    where inner = Alt <$> pAltInner <*> pAltInner
+
+pAltInner :: Parser RegEx
+pAltInner = Sym <$> satisfy (\a -> not $ elem a "[]")
 
 -- TODO Get escape characters correct
 pRegex :: Parser RegEx

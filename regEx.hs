@@ -10,7 +10,7 @@ data RegEx = Sym Char
            | Seq RegEx RegEx
            | Alt RegEx RegEx
            | Rep RegEx
-  deriving Show
+  deriving (Show, Eq)
 
 data NFA a = NFA (Set a) (Set (Move a)) a (Set a)
   deriving (Show, Eq)
@@ -92,14 +92,43 @@ fullTests = [
 
 fullStackTest :: RegString -> String -> Bool -> Test
 fullStackTest rs str expected =
-        TestCase $ assertEqual message (compile rs str) expected
+        TestCase $ assertEqual message expected (compile rs str)
     where message = "regstr " ++ quotify rs ++ " on input " ++
                    quotify str ++ " should be " ++ show expected
+
+parseTests :: [Test]
+parseTests = [
+    parseTest "a"       $ Just $ Sym 'a',
+    parseTest "b"       $ Just $ Sym 'b',
+    parseTest "ab"      $ Just $ Seq (Sym 'a') (Sym 'b'),
+    parseTest "[ab]"    $ Just $ Alt (Sym 'a') (Sym 'b'),
+    parseTest "abc"     $ Just seqABC,
+    parseTest "[abc]"   $ Just altABC,
+    parseTest "q[abc]"  $ Just $ Seq (Sym 'q') altABC,
+    parseTest "[abc][abc]"
+                        $ Just $ Seq altABC altABC,
+    parseTest "b"       $ Just $ Sym 'b'
+    ]
+    where altABC = Alt (Sym 'a') (Alt (Sym 'b') (Sym 'c'))
+          seqABC = Seq (Sym 'a') (Seq (Sym 'b') (Sym 'c'))
+
+parseTest :: RegString -> Maybe RegEx -> Test
+parseTest rs exp =
+        TestCase $ assertEqual message exp maybeR
+    where message = "regstr " ++ quotify rs ++ ": " ++ (gm result)
+          gm (a, Left err) = err
+          gm (a, Right r) = show r
+          result = unP pRegex rs
+          maybeR = eitherToMaybe $ snd result
+
+eitherToMaybe :: Either a b -> Maybe b
+eitherToMaybe (Left a) = Nothing
+eitherToMaybe (Right a) = Just a
 
 quotify :: String -> String
 quotify str = '"' : str ++ ['"']
 
-main = runTestTT $ TestList nfaTests --fullTests
+main = runTestTT $ TestList (nfaTests ++ parseTests) --fullTests
 
 compile :: RegString -> String -> RegResult
 compile rs str = undefined
@@ -341,4 +370,7 @@ pRegex = pAlt <|> pSeq <|> pSym
 
 pRegexNoSeq :: Parser RegEx
 pRegexNoSeq = pAlt <|> pSym
+
+-- REGEX TOP FUNCTIONS
+
 
